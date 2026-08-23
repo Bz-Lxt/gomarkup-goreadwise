@@ -1,0 +1,45 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+bin/
+dist/
+tmp/
+*.test
+*.out
+coverage.out
+coverage.html
+
+# Go
+vendor/
+backend/bin/
+
+# Node
+node_modules/
+frontend-user/dist/
+frontend-user/.vite/
+*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Env / secrets
+.env
+.env.local
+*.pem
+
+# Docker
+postgres-data/
+
+# Playwright
+test-results/
+playwright-report/
+blob-report/
+
+# SOP lock + generated docs stay tracked during development
+# (.alkaid-sop and docs/ are ignored only at /deploy)
