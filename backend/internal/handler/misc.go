@@ -136,6 +136,11 @@ func (h *Hub) Subscribe(w http.ResponseWriter, r *http.Request) {
 	h.mu.Lock()
 	h.clients[ch] = struct{}{}
 	h.mu.Unlock()
+	defer func() {
+		h.mu.Lock()
+		delete(h.clients, ch)
+		h.mu.Unlock()
+	}()
 	_, _ = w.Write([]byte("event: hello\ndata: {\"ok\":true}\n\n"))
 	flusher.Flush()
 	tick := time.NewTicker(25 * time.Second)
@@ -148,11 +153,6 @@ func (h *Hub) Subscribe(w http.ResponseWriter, r *http.Request) {
 			_, _ = w.Write([]byte(": ping\n\n"))
 			flusher.Flush()
 		case msg := <-ch:
-			defer func() {
-				h.mu.Lock()
-				delete(h.clients, ch)
-				h.mu.Unlock()
-			}()
 			_, _ = w.Write(msg)
 			flusher.Flush()
 		}
