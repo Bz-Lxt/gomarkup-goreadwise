@@ -101,7 +101,6 @@ func (h RebuildHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 type Hub struct {
 	mu      sync.RWMutex
 	clients map[chan []byte]struct{}
-	scratch bytes.Buffer
 }
 
 func NewHub() *Hub {
@@ -114,11 +113,11 @@ func (h *Hub) Broadcast(event string, payload any) {
 		"payload": payload,
 		"ts":      clock.FormatRFC3339(clock.Now()),
 	})
+	var buf bytes.Buffer
+	_, _ = fmt.Fprintf(&buf, "event: %s\ndata: %s\n\n", event, body)
+	msg := buf.Bytes()
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-	h.scratch.Reset()
-	_, _ = fmt.Fprintf(&h.scratch, "event: %s\ndata: %s\n\n", event, body)
-	msg := append([]byte(nil), h.scratch.Bytes()...)
 	for ch := range h.clients {
 		select {
 		case ch <- msg:
