@@ -28,6 +28,14 @@ type Pool struct {
 	syncFallback atomic.Int64
 	done         atomic.Int64
 	failed       atomic.Int64
+
+	// mu guards overflow. overflow parks retried jobs that could not be
+	// pushed back into the bounded jobs channel because it was momentarily
+	// full. A dedicated drainer goroutine feeds them back into jobs as soon
+	// as a worker frees a slot.
+	mu       sync.Mutex
+	overflow []model.GraphJob
+	wake     chan struct{}
 }
 
 func New(parent context.Context, db *store.DB, workers, queue int, handle Handler) *Pool {
@@ -39,12 +47,51 @@ func New(parent context.Context, db *store.DB, workers, queue int, handle Handle
 		workers: workers,
 		ctx:     ctx,
 		cancel:  cancel,
+		wake:    make(chan struct{}, 1),
 	}
+	p.wg.Add(1)
+	go p.drain()
 	for i := 0; i < workers; i++ {
 		p.wg.Add(1)
 		go p.loop(i)
 	}
 	return p
+}
+
+// drain is a dedicated goroutine that feeds overflowed retried jobs back into
+// the bounded jobs channel. Unlike a worker, it is NOT a consumer of jobs, so
+// doing a blocking send here can never self-deadlock: it simply parks until a
+// worker frees a slot. Without this, a worker that retries a job back into a
+// full queue blocks forever (the classic single-worker / all-workers-retry
+// self-deadlock), stalling the pipeline until the process is signalled.
+//
+// Overflow entries are popped before the send: if shutdown interrupts the
+// in-flight send the job is already persisted as 'pending' in the DB, so
+// Recover() will re-enqueue it on the next boot.
+func (p *Pool) drain() {
+	defer p.wg.Done()
+	for {
+		select {
+		case <-p.ctx.Done():
+			return
+		case <-p.wake:
+			for {
+				p.mu.Lock()
+				if len(p.overflow) == 0 {
+					p.mu.Unlock()
+					break
+				}
+				job := p.overflow[0]
+				p.overflow = p.overflow[1:]
+				p.mu.Unlock()
+				select {
+				case p.jobs <- job:
+				case <-p.ctx.Done():
+					return
+				}
+			}
+		}
+	}
 }
 
 func (p *Pool) loop(id int) {
@@ -75,20 +122,45 @@ func (p *Pool) run(job model.GraphJob) {
 		status := model.JobFailed
 		if isTransient(err) && job.Attempts < 3 {
 			status = model.JobPending
-			select {
-			case p.jobs <- job:
-			case <-p.ctx.Done():
-			}
 		}
 		if p.db != nil {
 			_ = p.db.MarkJob(ctx, job.ID, status, msg)
 		}
 		logger.L().Warn("job failed", slog.String("kind", job.Kind), slog.String("err", msg))
+		if status == model.JobPending {
+			// Retry re-enqueue must NEVER block a worker: a worker that
+			// blocks on a full p.jobs would self-deadlock (it is the very
+			// consumer that must drain the queue), pinning queue_depth at
+			// queue_cap until a stop signal arrives. Park on overflow
+			// instead; the dedicated drainer feeds it back as soon as a
+			// slot frees up.
+			job.Attempts++
+			p.requeue(job)
+		}
 		return
 	}
 	p.done.Add(1)
 	if p.db != nil {
 		_ = p.db.MarkJob(ctx, job.ID, model.JobDone, "")
+	}
+}
+
+// requeue puts a retried job back in front of the line. It first tries a
+// non-blocking send into p.jobs; if the bounded channel is full, it parks the
+// job on the overflow list and nudges the drainer. This guarantees forward
+// progress even when every worker is simultaneously retrying.
+func (p *Pool) requeue(job model.GraphJob) {
+	select {
+	case p.jobs <- job:
+		return
+	default:
+	}
+	p.mu.Lock()
+	p.overflow = append(p.overflow, job)
+	p.mu.Unlock()
+	select {
+	case p.wake <- struct{}{}:
+	default:
 	}
 }
 
@@ -134,7 +206,13 @@ func (p *Pool) Close() {
 	p.wg.Wait()
 }
 
-func (p *Pool) Depth() int { return len(p.jobs) }
+func (p *Pool) Depth() int {
+	n := len(p.jobs)
+	p.mu.Lock()
+	n += len(p.overflow)
+	p.mu.Unlock()
+	return n
+}
 func (p *Pool) Cap() int   { return cap(p.jobs) }
 func (p *Pool) Snapshot() model.MetricsSnapshot {
 	return model.MetricsSnapshot{
