@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -94,7 +95,11 @@ func (r RealProvider) Clip(ctx context.Context, rawURL string) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	req, err := http.NewRequest(http.MethodGet, u.String(), nil)
+	return r.fetch(ctx, u)
+}
+
+func (r RealProvider) fetch(ctx context.Context, u *url.URL) (Result, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
 		return Result{}, err
 	}

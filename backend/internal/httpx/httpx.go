@@ -1,6 +1,7 @@
 package httpx
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -39,6 +40,11 @@ var (
 	ErrDenied     = errors.New("denied")
 )
 
+// StatusClientClosed is the non-standard 499 used by nginx to signal that the
+// client went away before the response could be written. It is returned for
+// context-cancellation errors so handlers don't log a noisy 500.
+const StatusClientClosed = 499
+
 func JSON(w http.ResponseWriter, status int, data any) {
 	write(w, status, Envelope{Data: data})
 }
@@ -55,6 +61,10 @@ func FromError(w http.ResponseWriter, err error) {
 	switch {
 	case err == nil:
 		return
+	case errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded):
+		// Client went away or the request deadline elapsed; nothing useful to
+		// write back to a (likely already-closed) connection. Avoid a noisy 500.
+		Fail(w, StatusClientClosed, "CLIENT_CLOSED", "client closed connection")
 	case errors.Is(err, ErrValidation):
 		Fail(w, http.StatusBadRequest, "VALIDATION", err.Error())
 	case errors.Is(err, ErrNotFound):
@@ -258,6 +268,8 @@ func ErrorCodeOf(err error) string {
 	switch {
 	case err == nil:
 		return ""
+	case errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded):
+		return "CLIENT_CLOSED"
 	case errors.Is(err, ErrValidation):
 		return "VALIDATION"
 	case errors.Is(err, ErrNotFound):
