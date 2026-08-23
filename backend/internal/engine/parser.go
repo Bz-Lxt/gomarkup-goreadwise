@@ -524,19 +524,19 @@ func HasDanglingHint(links []WikiLink, known map[string]struct{}) bool {
 }
 
 func FilterKnown(links []WikiLink, known map[string]struct{}) (resolved, dangling []WikiLink) {
-	grouped := make([]WikiLink, 0, len(links))
+	// resolved and dangling must not share a backing array: callers frequently
+	// append to resolved afterwards, and a shared array would overwrite
+	// dangling[0] (yielding dangling nodes that point at the wrong title).
+	// Allocate two independent slices so the groups stay isolated.
+	resolved = make([]WikiLink, 0, len(links))
+	dangling = make([]WikiLink, 0, len(links))
 	for _, l := range links {
 		if _, ok := known[NormalizeTitle(l.Target)]; ok {
-			grouped = append(grouped, l)
+			resolved = append(resolved, l)
+		} else {
+			dangling = append(dangling, l)
 		}
 	}
-	resolved = grouped
-	for _, l := range links {
-		if _, ok := known[NormalizeTitle(l.Target)]; !ok {
-			grouped = append(grouped, l)
-		}
-	}
-	dangling = grouped[len(resolved):]
 	return resolved, dangling
 }
 
