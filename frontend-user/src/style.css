@@ -1,0 +1,89 @@
+@import "tailwindcss";
+
+:root {
+  --ink: #070b14;
+  --ink-2: #10182a;
+  --ink-3: #1a2438;
+  --line: #2a354d;
+  --gold: #d4a053;
+  --gold-dim: #8a6a32;
+  --parchment: #e8dcc8;
+  --mist: #8b93a7;
+  --rose: #d36b6b;
+  --teal: #6bb3b0;
+}
+
+html, body, #app {
+  height: 100%;
+  margin: 0;
+  background: var(--ink);
+  color: var(--parchment);
+  font-family: "IBM Plex Sans", sans-serif;
+}
+
+select {
+  appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'><polyline points='1,1 6,6 11,1' fill='none' stroke='%23999' stroke-width='1.6'/></svg>");
+  background-position: right 12px center;
+  background-repeat: no-repeat;
+  padding-right: 36px;
+}
+
+.starfield {
+  background:
+    radial-gradient(1200px 600px at 10% -10%, rgba(212, 160, 83, 0.08), transparent 50%),
+    radial-gradient(800px 400px at 110% 10%, rgba(107, 179, 176, 0.08), transparent 45%),
+    var(--ink);
+}
+
+.starfield::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.35;
+  background-image:
+    radial-gradient(1px 1px at 20% 30%, #fff, transparent),
+    radial-gradient(1px 1px at 70% 40%, #d4a053, transparent),
+    radial-gradient(1px 1px at 40% 80%, #fff, transparent),
+    radial-gradient(1px 1px at 85% 70%, #8b93a7, transparent);
+}
+
+.font-display { font-family: Fraunces, serif; }
+.font-mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+
+.wiki-link {
+  color: var(--gold);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.wiki-link.dangling { color: var(--rose); }
+
+.preview-md h1, .preview-md h2, .preview-md h3 {
+  font-family: Fraunces, serif;
+  margin: 0.8em 0 0.4em;
+}
+.preview-md p { line-height: 1.7; margin: 0.6em 0; }
+.preview-md code {
+  font-family: "IBM Plex Mono", monospace;
+  background: rgba(255,255,255,0.06);
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+}
+.preview-md pre {
+  background: #0c1220;
+  border: 1px solid var(--line);
+  padding: 12px;
+  border-radius: 8px;
+  overflow: auto;
+}
+.preview-md ul { padding-left: 1.2em; }
+
+.cm-editor { height: 100%; background: transparent !important; }
+.cm-editor .cm-scroller { font-family: "IBM Plex Mono", monospace; font-size: 13.5px; }
+.cm-editor.cm-focused { outline: none; }
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: #2a354d; border-radius: 99px; }
