@@ -100,18 +100,6 @@ func (r RealProvider) Clip(ctx context.Context, rawURL string) (Result, error) {
 	}
 	req.Header.Set("User-Agent", "GoReadwise/1.0 (+https://localhost; research clipper)")
 	req.Header.Set("Accept", "text/html,application/xhtml+xml")
-	checkRedirect := r.Client.CheckRedirect
-	if checkRedirect != nil {
-		r.Client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
-			if err := ctx.Err(); err != nil {
-				return err
-			}
-			return checkRedirect(req, via)
-		}
-		defer func() {
-			r.Client.CheckRedirect = checkRedirect
-		}()
-	}
 	resp, err := r.Client.Do(req)
 	if err != nil {
 		return Result{}, fmt.Errorf("fetch: %w", err)
