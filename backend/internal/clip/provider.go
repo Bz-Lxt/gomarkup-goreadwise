@@ -110,13 +110,11 @@ func (r RealProvider) Clip(ctx context.Context, rawURL string) (Result, error) {
 	}
 	limited := io.LimitReader(resp.Body, r.MaxBytes+1)
 	raw, err := io.ReadAll(limited)
-	if err != nil && len(raw) > 0 {
-		rest, retryErr := io.ReadAll(limited)
-		raw = append(raw, rest...)
-		err = retryErr
-	}
 	if err != nil {
-		return Result{}, err
+		// io.ReadAll 已经会把 Reader 里所有可读数据读尽，无需二次读取。
+		// 中途的 connection reset / unexpected EOF 会同时返回已读字节和错误，
+		// 此时必须丢弃这些截断字节并失败，绝不能当成完整文章落库。
+		return Result{}, fmt.Errorf("read upstream: %w", err)
 	}
 	if int64(len(raw)) > r.MaxBytes {
 		return Result{}, fmt.Errorf("%w: response exceeds size limit", httpx.ErrValidation)
